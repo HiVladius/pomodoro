@@ -1,20 +1,14 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use chrono::{Local, NaiveDate};
+use chrono::Local;
 use once_cell::sync::Lazy;
-use rdev::{Event, EventType, ListenError, listen};
+use rdev::{listen, Event, EventType};
 use serde::{Deserialize, Serialize};
-use tauri::Emitter;
-use std::fs::read;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use tauri::{
-    plugin::{Builder, TauriPlugin},
-    AppHandle, Manager, RunEvent, Runtime, State,
-};
-use tauri_plugin_store::{StoreBuilder, StoreExt};
+use tauri::{Emitter, Manager, AppHandle};
 
 #[derive(Clone, Debug, PartialEq)]
 enum AppState {
@@ -72,7 +66,8 @@ const BREAK_FRASES: &[&str] = &[
 
 fn get_random_frase(frases: &[&str]) -> String {
     use rand::Rng;
-    let index = rand::thread_rng().gen_range(0..frases.len());
+    let mut rng = rand::rng();
+    let index = rng.random_range(0..frases.len());
     frases[index].to_string()
 }
 
@@ -80,12 +75,12 @@ fn get_random_frase(frases: &[&str]) -> String {
 struct TimerPayload {
     time: String,
 }
-#[derive(Clone, serde::Serialize)]
-struct StatsPayload {
-    concentrated: u32,
-    inactive: u32,
-    pauses: u32,
-}
+// #[derive(Clone, serde::Serialize)]
+// struct StatsPayload {
+    // concentrated: u32,
+    // inactive: u32,
+    // pauses: u32,
+// }
 
 #[derive(Clone, serde::Serialize)]
 struct ToastPayload {
@@ -93,17 +88,7 @@ struct ToastPayload {
     frase: String,
 }
 
-// Función para mostrar toasts
-fn show_toast(app_handle: &AppHandle, tipo: String, frase: String) {
-    let payload = ToastPayload { tipo, frase };
-    let _ = app_handle.emit("show-toast", payload);
-}
-
 // Función para guardar estadísticas al disco
-fn save_stats_to_disk(app_handle: &AppHandle, concentrated: u32, inactive: u32) {
-    // Implementar guardado de estadísticas
-    println!("Guardando estadísticas: concentrated={}, inactive={}", concentrated, inactive);
-}
 
 /// Inicia el listener de actividad global (rdev) en un hilo separado
 fn start_activity_listener(app_handle: AppHandle) {
@@ -155,7 +140,9 @@ fn start_timer_thread(app_handle: AppHandle) {
                 let time_string = format!("{:02}:{:02}", minutes, seconds);
 
                 // Enviar "tick" a React
-                app_handle.emit("timer-tick", TimerPayload { time: time_string }).unwrap();
+                app_handle
+                    .emit("timer-tick", TimerPayload { time: time_string })
+                    .unwrap();
 
                 // Lógica de Focus (Inactividad)
                 if state.app == AppState::Focus {
@@ -164,7 +151,9 @@ fn start_timer_thread(app_handle: AppHandle) {
                     // Si se pasa del límite, manda toast "angry"
                     if state.inactivity_seconds == INACTIVITY_LIMIT_SECS {
                         state.stats_inactive += 1; // Contar como "inactivo"
-                        app_handle.emit("stats-update", state.stats_inactive).unwrap();
+                        app_handle
+                            .emit("stats-update", state.stats_inactive)
+                            .unwrap();
                         show_toast(
                             &app_handle,
                             "angry".to_string(),
@@ -179,7 +168,11 @@ fn start_timer_thread(app_handle: AppHandle) {
                         // Fin de Focus -> Iniciar Break
                         state.app = AppState::Break;
                         state.timer_seconds = BREAK_TIME_SECS;
-                        save_stats_to_disk(&app_handle, state.stats_concentrated, state.stats_inactive);
+                        save_stats_to_disk(
+                            &app_handle,
+                            state.stats_concentrated,
+                            state.stats_inactive,
+                        );
                         show_toast(
                             &app_handle,
                             "break".to_string(),
@@ -190,7 +183,14 @@ fn start_timer_thread(app_handle: AppHandle) {
                         state.app = AppState::Idle;
                         state.timer_seconds = FOCUS_TIME_SECS;
                         // Enviar tiempo reseteado
-                        app_handle.emit("timer-tick", TimerPayload { time: "25:00".to_string() }).unwrap();
+                        app_handle
+                            .emit(
+                                "timer-tick",
+                                TimerPayload {
+                                    time: "25:00".to_string(),
+                                },
+                            )
+                            .unwrap();
                     }
                 }
             }
@@ -212,10 +212,90 @@ fn start_pomodoro() {
 }
 
 #[tauri::command]
-fn pause_pomodoro(app_handle: AppHandle){
+fn pause_pomodoro(app_handle: AppHandle) {
     let mut state = GLOBAL_STATE.lock().unwrap();
+    state.app = AppState::Idle;
+    state.stats_pause += 1;
+    app_handle.emit("status-update", state.stats_pause).unwrap();
 }
 
+// Función para mostrar toasts
+//helper: to send event show toast
+fn show_toast(app_handle: &AppHandle, tipo: String, frase: String) {
+    if let Some(window) = app_handle.get_webview_window("toast") {
+        window
+            .emit("show-toast", ToastPayload { tipo, frase })
+            .unwrap();
+    }
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+struct DailyStat {
+    concentrated: u32,
+    inactive: u32,
+}
+
+// Función para guardar stats - ahora emite evento para que el frontend maneje el store
+fn save_stats_to_disk(app_handle: &AppHandle, concentrated: u32, inactive: u32) {
+    let today = Local::now().date_naive().to_string();
+    
+    let new_stats = DailyStat {
+        concentrated,
+        inactive,
+    };
+    
+    // Emitir evento para que el frontend actualice el store
+    if let Some(window) = app_handle.get_webview_window("main") {
+        window.emit("update-daily-stats", serde_json::json!({
+            "date": today,
+            "stats": new_stats
+        })).unwrap();
+    }
+}
+
+#[derive(Serialize)]
+struct ChartData {
+    labels: Vec<String>,
+    concentration: Vec<u32>,
+    inactivity: Vec<u32>,
+}
+
+#[tauri::command]
+fn get_daily_stats(_app_handle: AppHandle) -> ChartData {
+    // Los datos ahora se manejan desde el frontend con el store de Tauri
+    // Esta función puede devolver datos por defecto o ser removida
+    let mut labels = Vec::new();
+    let concentration_data = vec![0; 7];
+    let inactivity_data = vec![0; 7];
+
+    for i in (0..7).rev() {
+        let date = Local::now().date_naive() - chrono::Duration::days(i);
+        labels.push(date.format("%d/%m").to_string());
+    }
+    
+    ChartData {
+        labels,
+        concentration: concentration_data,
+        inactivity: inactivity_data,
+    }
+}
+
+
+
 fn main() {
-    toast_lib::run()
+    tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .setup(|app| {
+            // Inicia los hilos de fondo al arrancar la app
+            start_activity_listener(app.handle().clone());
+            start_timer_thread(app.handle().clone());
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            start_pomodoro,
+            pause_pomodoro,
+            get_daily_stats
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
