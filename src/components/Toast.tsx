@@ -4,6 +4,7 @@ import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import angry from "../assets/scream.jpg";
 import motivation from "../assets/love.jpg";
+import "./Toast.css";
 
 interface ToastPayload {
     tipo: "angry" | "motivation" | "break";
@@ -47,13 +48,15 @@ export const Toast: React.FC = () => {
     const [visible, setVisible] = useState(false);
     const [frase, setFrase] = useState("");
     const [imagenSrc, setImagenSrc] = useState("");
-    const [positionClass, setPositionClass] = useState("top-right");
+    const [tipoToast, setTipoToast] = useState<"angry" | "motivation" | "break">("motivation");
 
     useEffect(() => {
         const unlisten = listen<ToastPayload>("show-toast", async (e) => {
             const { tipo, frase } = e.payload;
 
             setFrase(frase);
+            setTipoToast(tipo);
+            
             if (tipo === "angry") {
                 setImagenSrc(angry);
             } else if (tipo === "motivation") {
@@ -61,6 +64,7 @@ export const Toast: React.FC = () => {
             } else {
                 setImagenSrc("");
             }
+            
             const newPosition = await getRandomPosition();
             await getCurrentWindow().setPosition(newPosition);
             await getCurrentWindow().show();
@@ -78,14 +82,15 @@ export const Toast: React.FC = () => {
     }, []);
 
     return (
-    
-        <div id='toast' className={visible ? 'show' : ''} style={{visibility: visible ? 'visible' : 'hidden'}}>
-
-            <div className="toast-content">
-                {imagenSrc && <img src={imagenSrc} alt="Toast Image" className="toast-img" />}
+        <div id='toast' className={`toast ${tipoToast} ${visible ? 'show' : 'hide'}`}>
+            <div className="toast-container">
+                <div className="toast-content">
+                    {imagenSrc && <img src={imagenSrc} alt="Toast Image" className="toast-img" />}
+                </div>
+                <div className="toast-message">
+                    <p id="frase">{frase}</p>
+                </div>
             </div>
-            <a id="frase">{frase}</a>
         </div>
-    
-)
+    );
 };

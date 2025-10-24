@@ -12,9 +12,10 @@ use tauri::{Emitter, Manager, AppHandle};
 
 #[derive(Clone, Debug, PartialEq)]
 enum AppState {
-    Idle,  // Esperando
-    Focus, // En Pomodoro (25 min )
-    Break, // En Descanso (5 min)
+    Idle,   // Esperando
+    Focus,  // En Pomodoro (25 min)
+    Paused, // Pausado (mantiene el tiempo)
+    Break,  // En Descanso (5 min)
 }
 
 struct GlobalState {
@@ -75,12 +76,18 @@ fn get_random_frase(frases: &[&str]) -> String {
 struct TimerPayload {
     time: String,
 }
-// #[derive(Clone, serde::Serialize)]
-// struct StatsPayload {
-    // concentrated: u32,
-    // inactive: u32,
-    // pauses: u32,
-// }
+
+#[derive(Clone, serde::Serialize)]
+struct StatsPayload {
+    concentrated: u32,
+    inactive: u32,
+    pauses: u32,
+}
+
+#[derive(Clone, serde::Serialize, Debug)]
+struct StateChangePayload {
+    state: String, // "Idle", "Focus", "Paused", "Break"
+}
 
 #[derive(Clone, serde::Serialize)]
 struct ToastPayload {
@@ -92,14 +99,14 @@ struct ToastPayload {
 
 /// Inicia el listener de actividad global (rdev) en un hilo separado
 fn start_activity_listener(app_handle: AppHandle) {
-    let _ = thread::spawn(move || {
+    thread::spawn(move || {
         let callback = move |event: Event| {
             match event.event_type {
                 // Si hay actividad, reseteamos el contador de inactividad
                 EventType::KeyPress(_) | EventType::MouseMove { .. } | EventType::Wheel { .. } => {
                     let mut state = GLOBAL_STATE.lock().unwrap();
                     if state.app == AppState::Focus {
-                        // Si estaba inactivo, ahora está activo
+                        // Si estaba inactivo (superó el límite), ahora está activo de nuevo
                         if state.inactivity_seconds >= INACTIVITY_LIMIT_SECS {
                             // Enviar toast de motivación por volver
                             show_toast(
@@ -107,10 +114,8 @@ fn start_activity_listener(app_handle: AppHandle) {
                                 "motivation".to_string(),
                                 get_random_frase(MOTIVATION_FRASES),
                             );
-                            state.stats_concentrated += 1; // Contar como "concentrado"
-                            let _ = app_handle.emit("stats-update", state.stats_concentrated);
                         }
-                        state.inactivity_seconds = 0; // Resetea inactividad
+                        state.inactivity_seconds = 0; // Resetea inactividad con cualquier actividad
                     }
                 }
                 _ => (),
@@ -125,12 +130,30 @@ fn start_activity_listener(app_handle: AppHandle) {
 
 fn start_timer_thread(app_handle: AppHandle) {
     thread::spawn(move || {
+        let mut last_state = AppState::Idle;
+        
         loop {
             thread::sleep(Duration::from_secs(1)); // Se ejecuta cada segundo
 
             let mut state = GLOBAL_STATE.lock().unwrap();
 
-            // Solo contamos si estamos en Focus o Break
+            // Emitir evento si el estado cambió
+            if state.app != last_state {
+                last_state = state.app.clone();
+                let state_str = match state.app {
+                    AppState::Focus => "Focus",
+                    AppState::Break => "Break",
+                    AppState::Paused => "Paused",
+                    AppState::Idle => "Idle",
+                };
+                app_handle
+                    .emit("state-changed", StateChangePayload { 
+                        state: state_str.to_string() 
+                    })
+                    .unwrap();
+            }
+
+            // Solo contamos si estamos en Focus o Break (NO en Paused)
             if state.app == AppState::Focus || state.app == AppState::Break {
                 state.timer_seconds -= 1;
 
@@ -152,7 +175,11 @@ fn start_timer_thread(app_handle: AppHandle) {
                     if state.inactivity_seconds == INACTIVITY_LIMIT_SECS {
                         state.stats_inactive += 1; // Contar como "inactivo"
                         app_handle
-                            .emit("stats-update", state.stats_inactive)
+                            .emit("stats-update", StatsPayload {
+                                concentrated: state.stats_concentrated,
+                                inactive: state.stats_inactive,
+                                pauses: state.stats_pause,
+                            })
                             .unwrap();
                         show_toast(
                             &app_handle,
@@ -165,14 +192,32 @@ fn start_timer_thread(app_handle: AppHandle) {
                 // Lógica de cambio de estado (Fin de ciclo)
                 if state.timer_seconds == 0 {
                     if state.app == AppState::Focus {
+                        // Si completó el ciclo de Focus sin estar inactivo al final, contar como concentrado
+                        if state.inactivity_seconds < INACTIVITY_LIMIT_SECS {
+                            state.stats_concentrated += 1;
+                        }
+                        
                         // Fin de Focus -> Iniciar Break
                         state.app = AppState::Break;
                         state.timer_seconds = BREAK_TIME_SECS;
+                        state.stats_pause += 1; // Contar descanso
+                        
+                        // Guardar estadísticas
                         save_stats_to_disk(
                             &app_handle,
                             state.stats_concentrated,
                             state.stats_inactive,
                         );
+                        
+                        // Emitir stats actualizadas
+                        app_handle
+                            .emit("stats-update", StatsPayload {
+                                concentrated: state.stats_concentrated,
+                                inactive: state.stats_inactive,
+                                pauses: state.stats_pause,
+                            })
+                            .unwrap();
+                        
                         show_toast(
                             &app_handle,
                             "break".to_string(),
@@ -182,6 +227,8 @@ fn start_timer_thread(app_handle: AppHandle) {
                         // Fin de Break -> Volver a Idle
                         state.app = AppState::Idle;
                         state.timer_seconds = FOCUS_TIME_SECS;
+                        state.stats_concentrated = 0;
+                        state.stats_inactive = 0;
                         // Enviar tiempo reseteado
                         app_handle
                             .emit(
@@ -214,9 +261,73 @@ fn start_pomodoro() {
 #[tauri::command]
 fn pause_pomodoro(app_handle: AppHandle) {
     let mut state = GLOBAL_STATE.lock().unwrap();
+    // Solo pausar si estamos en Focus
+    if state.app == AppState::Focus {
+        state.app = AppState::Paused;
+        state.stats_pause += 1; // Incrementar contador de pausas
+        // Emitir evento de stats actualizado
+        app_handle
+            .emit("stats-update", StatsPayload {
+                concentrated: state.stats_concentrated,
+                inactive: state.stats_inactive,
+                pauses: state.stats_pause,
+            })
+            .unwrap();
+        // NO reiniciamos timer_seconds, se mantiene
+    }
+}
+
+#[tauri::command]
+fn resume_pomodoro() {
+    let mut state = GLOBAL_STATE.lock().unwrap();
+    // Solo reanudar si estamos pausados
+    if state.app == AppState::Paused {
+        state.app = AppState::Focus;
+        state.inactivity_seconds = 0; // Resetear inactividad al reanudar
+    }
+}
+
+#[tauri::command]
+fn stop_pomodoro(app_handle: AppHandle) {
+    let mut state = GLOBAL_STATE.lock().unwrap();
+    
+    // Si estaba en Focus o Paused, contar como un ciclo de concentración completado
+    if state.app == AppState::Focus || state.app == AppState::Paused {
+        state.stats_concentrated += 1;
+        
+        // Guardar estadísticas antes de resetear
+        save_stats_to_disk(
+            &app_handle,
+            state.stats_concentrated,
+            state.stats_inactive,
+        );
+    }
+    
     state.app = AppState::Idle;
-    state.stats_pause += 1;
-    app_handle.emit("status-update", state.stats_pause).unwrap();
+    state.timer_seconds = FOCUS_TIME_SECS;
+    state.stats_concentrated = 0;
+    state.stats_inactive = 0;
+    state.stats_pause = 0;
+    state.inactivity_seconds = 0;
+    
+    // Enviar tiempo reseteado
+    app_handle
+        .emit(
+            "timer-tick",
+            TimerPayload {
+                time: "25:00".to_string(),
+            },
+        )
+        .unwrap();
+        
+    // Enviar stats reseteadas
+    app_handle
+        .emit("stats-update", StatsPayload {
+            concentrated: 0,
+            inactive: 0,
+            pauses: 0,
+        })
+        .unwrap();
 }
 
 // Función para mostrar toasts
@@ -294,6 +405,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_pomodoro,
             pause_pomodoro,
+            resume_pomodoro,
+            stop_pomodoro,
             get_daily_stats
         ])
         .run(tauri::generate_context!())
