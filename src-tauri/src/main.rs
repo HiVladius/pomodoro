@@ -40,7 +40,7 @@ static GLOBAL_STATE: Lazy<Arc<Mutex<GlobalState>>> = Lazy::new(|| {
 
 const FOCUS_TIME_SECS: u32 = 25 * 60;
 const BREAK_TIME_SECS: u32 = 5 * 60;
-const INACTIVITY_LIMIT_SECS: u32 = 5 * 60;
+const INACTIVITY_LIMIT_SECS: u32 = 2 * 60; // 2 minutos de tolerancia
 
 const MOTIVATION_FRASES: &[&str] = &[
     "¡Sigue adelante!",
@@ -89,11 +89,8 @@ struct StateChangePayload {
     state: String, // "Idle", "Focus", "Paused", "Break"
 }
 
-#[derive(Clone, serde::Serialize)]
-struct ToastPayload {
-    tipo: String, // "angry", "motivation", "break"
-    frase: String,
-}
+
+
 
 // Función para guardar estadísticas al disco
 
@@ -102,12 +99,20 @@ fn start_activity_listener(app_handle: AppHandle) {
     thread::spawn(move || {
         let callback = move |event: Event| {
             match event.event_type {
-                // Si hay actividad, reseteamos el contador de inactividad
-                EventType::KeyPress(_) | EventType::MouseMove { .. } | EventType::Wheel { .. } => {
+                // Si hay actividad de teclado, mouse o scroll
+                EventType::KeyPress(_) | 
+                EventType::KeyRelease(_) |
+                EventType::MouseMove { .. } | 
+                EventType::ButtonPress(_) |
+                EventType::ButtonRelease(_) |
+                EventType::Wheel { .. } => {
                     let mut state = GLOBAL_STATE.lock().unwrap();
                     if state.app == AppState::Focus {
+                        let was_inactive = state.inactivity_seconds >= INACTIVITY_LIMIT_SECS;
+                        
                         // Si estaba inactivo (superó el límite), ahora está activo de nuevo
-                        if state.inactivity_seconds >= INACTIVITY_LIMIT_SECS {
+                        if was_inactive {
+                            println!("[Activity] Usuario volvió a estar activo después de {} segundos", state.inactivity_seconds);
                             // Enviar toast de motivación por volver
                             show_toast(
                                 &app_handle,
@@ -115,15 +120,17 @@ fn start_activity_listener(app_handle: AppHandle) {
                                 get_random_frase(MOTIVATION_FRASES),
                             );
                         }
-                        state.inactivity_seconds = 0; // Resetea inactividad con cualquier actividad
+                        
+                        // Resetea inactividad con cualquier actividad
+                        state.inactivity_seconds = 0;
                     }
                 }
-                _ => (),
             }
         };
 
+        println!("[Activity Listener] Iniciado correctamente");
         if let Err(error) = listen(callback) {
-            eprintln!("Error al escuchar eventos de rdev: {:?}", error);
+            eprintln!("[Activity Listener] Error al escuchar eventos de rdev: {:?}", error);
         }
     });
 }
@@ -171,16 +178,39 @@ fn start_timer_thread(app_handle: AppHandle) {
                 if state.app == AppState::Focus {
                     state.inactivity_seconds += 1;
 
-                    // Si se pasa del límite, manda toast "angry"
-                    if state.inactivity_seconds == INACTIVITY_LIMIT_SECS {
-                        state.stats_inactive += 1; // Contar como "inactivo"
-                        app_handle
-                            .emit("stats-update", StatsPayload {
-                                concentrated: state.stats_concentrated,
-                                inactive: state.stats_inactive,
-                                pauses: state.stats_pause,
-                            })
-                            .unwrap();
+                    // Debug: mostrar cada minuto el estado de inactividad
+                    if state.inactivity_seconds % 60 == 0 {
+                        println!("[Timer] Inactividad: {} segundos ({} minutos)", 
+                            state.inactivity_seconds, 
+                            state.inactivity_seconds / 60);
+                    }
+
+                    // Si alcanza el límite de inactividad (2 minutos) o cada 2 minutos adicionales
+                    if state.inactivity_seconds >= INACTIVITY_LIMIT_SECS 
+                        && state.inactivity_seconds % INACTIVITY_LIMIT_SECS == 0 {
+                        println!("[Timer] ¡Usuario INACTIVO! {} segundos sin actividad", state.inactivity_seconds);
+                        
+                        // Solo incrementar stats_inactive la primera vez
+                        if state.inactivity_seconds == INACTIVITY_LIMIT_SECS {
+                            state.stats_inactive += 1;
+                            
+                            // Guardar estadísticas
+                            save_stats_to_disk(
+                                &app_handle,
+                                state.stats_concentrated,
+                                state.stats_inactive,
+                            );
+                            
+                            app_handle
+                                .emit("stats-update", StatsPayload {
+                                    concentrated: state.stats_concentrated,
+                                    inactive: state.stats_inactive,
+                                    pauses: state.stats_pause,
+                                })
+                                .unwrap();
+                        }
+                        
+                        // Mostrar toast cada 2 minutos de inactividad
                         show_toast(
                             &app_handle,
                             "angry".to_string(),
@@ -227,8 +257,8 @@ fn start_timer_thread(app_handle: AppHandle) {
                         // Fin de Break -> Volver a Idle
                         state.app = AppState::Idle;
                         state.timer_seconds = FOCUS_TIME_SECS;
-                        state.stats_concentrated = 0;
-                        state.stats_inactive = 0;
+                        // NO reseteamos las estadísticas - se acumulan durante el día
+                        
                         // Enviar tiempo reseteado
                         app_handle
                             .emit(
@@ -252,9 +282,7 @@ fn start_pomodoro() {
         state.app = AppState::Focus;
         state.timer_seconds = FOCUS_TIME_SECS;
         state.inactivity_seconds = 0;
-        state.stats_concentrated = 0;
-        state.stats_inactive = 0;
-        state.stats_pause = 0;
+        // NO reseteamos las estadísticas aquí - se acumulan durante el día
     }
 }
 
@@ -295,7 +323,16 @@ fn stop_pomodoro(app_handle: AppHandle) {
     if state.app == AppState::Focus || state.app == AppState::Paused {
         state.stats_concentrated += 1;
         
-        // Guardar estadísticas antes de resetear
+        // Emitir stats actualizadas inmediatamente
+        app_handle
+            .emit("stats-update", StatsPayload {
+                concentrated: state.stats_concentrated,
+                inactive: state.stats_inactive,
+                pauses: state.stats_pause,
+            })
+            .unwrap();
+        
+        // Guardar estadísticas
         save_stats_to_disk(
             &app_handle,
             state.stats_concentrated,
@@ -305,10 +342,8 @@ fn stop_pomodoro(app_handle: AppHandle) {
     
     state.app = AppState::Idle;
     state.timer_seconds = FOCUS_TIME_SECS;
-    state.stats_concentrated = 0;
-    state.stats_inactive = 0;
-    state.stats_pause = 0;
     state.inactivity_seconds = 0;
+    // NO reseteamos las estadísticas - se mantienen durante el día
     
     // Enviar tiempo reseteado
     app_handle
@@ -319,8 +354,16 @@ fn stop_pomodoro(app_handle: AppHandle) {
             },
         )
         .unwrap();
-        
-    // Enviar stats reseteadas
+}
+
+#[tauri::command]
+fn reset_daily_stats(app_handle: AppHandle) {
+    let mut state = GLOBAL_STATE.lock().unwrap();
+    state.stats_concentrated = 0;
+    state.stats_inactive = 0;
+    state.stats_pause = 0;
+    
+    // Emitir stats reseteadas
     app_handle
         .emit("stats-update", StatsPayload {
             concentrated: 0,
@@ -330,13 +373,39 @@ fn stop_pomodoro(app_handle: AppHandle) {
         .unwrap();
 }
 
+#[tauri::command]
+fn initialize_stats(concentrated: u32, inactive: u32) {
+    let mut state = GLOBAL_STATE.lock().unwrap();
+    state.stats_concentrated = concentrated;
+    state.stats_inactive = inactive;
+    state.stats_pause = 0; // Las pausas siempre empiezan en 0
+    println!("[Stats] Inicializadas desde store: concentrated={}, inactive={}", concentrated, inactive);
+}
+
+
+
 // Función para mostrar toasts
-//helper: to send event show toast
+//helper: to send event show toast - usando eval para ejecutar JS directamente
 fn show_toast(app_handle: &AppHandle, tipo: String, frase: String) {
     if let Some(window) = app_handle.get_webview_window("toast") {
-        window
-            .emit("show-toast", ToastPayload { tipo, frase })
-            .unwrap();
+        // Crear payload JSON manualmente para evitar problemas de escape
+        let payload_json = format!(
+            r#"{{"tipo":"{}","frase":"{}"}}"#,
+            tipo.replace("\"", "\\\""),
+            frase.replace("\"", "\\\"")
+        );
+        
+        // Ejecutar JavaScript directamente en la ventana toast
+        let js_code = format!(
+            r#"window.dispatchEvent(new CustomEvent('show-toast', {{ detail: {} }}));"#,
+            payload_json
+        );
+        
+        if let Err(e) = window.eval(&js_code) {
+            eprintln!("[Toast] Error al ejecutar JavaScript: {:?}", e);
+        }
+    } else {
+        eprintln!("[Toast] ERROR: No se encontró la ventana 'toast'");
     }
 }
 
@@ -407,7 +476,9 @@ fn main() {
             pause_pomodoro,
             resume_pomodoro,
             stop_pomodoro,
-            get_daily_stats
+            reset_daily_stats,
+            initialize_stats,
+            get_daily_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

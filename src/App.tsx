@@ -1,12 +1,10 @@
-// toast/src/App.tsx
-import { useState, useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
-import { Chart, registerables } from 'chart.js/auto';
-import './App.css';
-import { invoke } from '@tauri-apps/api/core';
-import { storeManager } from './utils/storeManager';
+import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 
-Chart.register(...registerables);
+import "./App.css";
+import { invoke } from "@tauri-apps/api/core";
+import { storeManager } from "./utils/storeManager";
+import { WeeklyChart } from "./components/WeeklyChart";
 
 // Interfaces para los eventos de Rust
 interface TimerPayload {
@@ -20,7 +18,7 @@ interface StatsPayload {
 }
 
 interface StatePayload {
-  state: 'Idle' | 'Focus' | 'Paused' | 'Break';
+  state: "Idle" | "Focus" | "Paused" | "Break";
 }
 
 interface UpdateDailyStatsPayload {
@@ -32,13 +30,17 @@ interface UpdateDailyStatsPayload {
 }
 
 function App() {
-  const [timer, setTimer] = useState('25:00');
-  const [stats, setStats] = useState({ concentrated: 0, inactive: 0, pauses: 0 });
-  const [currentState, setCurrentState] = useState<'Idle' | 'Focus' | 'Paused' | 'Break'>('Idle');
+  const [timer, setTimer] = useState("25:00");
+  const [stats, setStats] = useState({
+    concentrated: 0,
+    inactive: 0,
+    pauses: 0,
+  });
+  const [currentState, setCurrentState] = useState<
+    "Idle" | "Focus" | "Paused" | "Break"
+  >("Idle");
   const [isStoreReady, setIsStoreReady] = useState(false);
-
-  const chartRef = useRef<HTMLCanvasElement>(null);
-  const chartInstanceRef = useRef<Chart | null>(null);
+  const [chartReloadTrigger, setChartReloadTrigger] = useState(0);
 
   // Inicializar el store
   useEffect(() => {
@@ -46,10 +48,29 @@ function App() {
       try {
         await storeManager.initialize();
         setIsStoreReady(true);
-        // Cargar estadísticas semanales al iniciar
-        loadChart();
+
+        // Cargar estadísticas del día actual
+        const today = new Date().toISOString().split("T")[0];
+        const todayStats = await storeManager.getStats(today);
+
+        console.log("[App] Estadísticas cargadas del store:", todayStats);
+
+        // Actualizar el estado con las estadísticas guardadas
+        setStats({
+          concentrated: todayStats.concentrated,
+          inactive: todayStats.inactive,
+          pauses: 0, // Las pausas no se persisten, son solo del ciclo actual
+        });
+
+        // Inicializar el backend de Rust con las estadísticas persistidas
+        await invoke("initialize_stats", {
+          concentrated: todayStats.concentrated,
+          inactive: todayStats.inactive,
+        });
+
+        console.log("[App] Backend inicializado con stats persistidas");
       } catch (error) {
-        console.error('Error initializing store:', error);
+        console.error("Error initializing store:", error);
       }
     };
     initStore();
@@ -60,147 +81,94 @@ function App() {
     if (!isStoreReady) return;
 
     // Escuchar el "tick" del temporizador
-    const unlistenTick = listen<TimerPayload>('timer-tick', (event) => {
+    const unlistenTick = listen<TimerPayload>("timer-tick", (event) => {
       setTimer(event.payload.time);
     });
 
     // Escuchar actualizaciones de estadísticas
-    const unlistenStats = listen<StatsPayload>('stats-update', (event) => {
+    const unlistenStats = listen<StatsPayload>("stats-update", (event) => {
       setStats(event.payload);
     });
 
     // Escuchar cambios de estado
-    const unlistenState = listen<StatePayload>('state-changed', (event) => {
+    const unlistenState = listen<StatePayload>("state-changed", (event) => {
       setCurrentState(event.payload.state);
     });
 
     // Escuchar actualizaciones de estadísticas diarias
-    const unlistenDailyStats = listen<UpdateDailyStatsPayload>('update-daily-stats', async (event) => {
-      try {
-        await storeManager.updateStats(event.payload.date, event.payload.stats);
-        // Recargar la gráfica
-        await loadChart();
-      } catch (error) {
-        console.error('Error updating daily stats:', error);
+    const unlistenDailyStats = listen<UpdateDailyStatsPayload>(
+      "update-daily-stats",
+      async (event) => {
+        try {
+          console.log("[App] Guardando estadísticas:", event.payload);
+          await storeManager.updateStats(
+            event.payload.date,
+            event.payload.stats
+          );
+          console.log("[App] Estadísticas guardadas exitosamente");
+          
+          // Disparar recarga del gráfico
+          setChartReloadTrigger((prev) => prev + 1);
+        } catch (error) {
+          console.error("[App] Error updating daily stats:", error);
+        }
       }
-    });
+    );
 
     return () => {
-      unlistenTick.then(f => f());
-      unlistenStats.then(f => f());
-      unlistenState.then(f => f());
-      unlistenDailyStats.then(f => f());
-      chartInstanceRef.current?.destroy();
+      unlistenTick.then((f) => f());
+      unlistenStats.then((f) => f());
+      unlistenState.then((f) => f());
+      unlistenDailyStats.then((f) => f());
     };
   }, [isStoreReady]);
 
-  const loadChart = async () => {
-    if (chartRef.current && isStoreReady) {
-      try {
-        const weeklyStat = await storeManager.getWeeklyStats();
-        if (chartInstanceRef.current) {
-          chartInstanceRef.current.destroy();
-        }
-        chartInstanceRef.current = new Chart(chartRef.current, {
-          type: 'bar',
-          data: {
-            labels: weeklyStat.labels,
-            datasets: [
-              {
-                label: 'Concentración',
-                data: weeklyStat.concentration,
-                backgroundColor: 'rgba(79, 172, 254, 0.7)',
-                borderColor: 'rgba(79, 172, 254, 1)',
-                borderWidth: 2,
-                borderRadius: 6,
-              },
-              {
-                label: 'Inactividad',
-                data: weeklyStat.inactivity,
-                backgroundColor: 'rgba(255, 107, 107, 0.7)',
-                borderColor: 'rgba(255, 107, 107, 1)',
-                borderWidth: 2,
-                borderRadius: 6,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                display: true,
-                position: 'top',
-                labels: {
-                  font: {
-                    size: 12,
-                    weight: 'bold',
-                  },
-                  padding: 15,
-                },
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-            },
-          },
-        });
-      } catch (error) {
-        console.error('Error loading chart:', error);
-      }
-    }
-  };
-
   const handleStart = () => {
-    invoke('start_pomodoro');
+    invoke("start_pomodoro");
   };
 
   const handlePause = () => {
-    invoke('pause_pomodoro');
+    invoke("pause_pomodoro");
   };
 
   const handleResume = () => {
-    invoke('resume_pomodoro');
+    invoke("resume_pomodoro");
   };
 
   const handleStop = () => {
-    invoke('stop_pomodoro');
+    invoke("stop_pomodoro");
   };
 
   const getStateLabel = () => {
     switch (currentState) {
-      case 'Focus':
-        return '🎯 En Concentración';
-      case 'Paused':
-        return '⏸ Pausado';
-      case 'Break':
-        return '☕ En Descanso';
+      case "Focus":
+        return "🎯 En Concentración";
+      case "Paused":
+        return "⏸ Pausado";
+      case "Break":
+        return "☕ En Descanso";
       default:
-        return '😴 Inactivo';
+        return "😴 Inactivo";
     }
   };
 
   const getStateColor = () => {
     switch (currentState) {
-      case 'Focus':
-        return 'focus';
-      case 'Paused':
-        return 'idle';
-      case 'Break':
-        return 'break';
+      case "Focus":
+        return "focus";
+      case "Paused":
+        return "idle";
+      case "Break":
+        return "break";
       default:
-        return 'idle';
+        return "idle";
     }
   };
 
   if (!isStoreReady) {
     return (
       <div className="app">
-        <div style={{ textAlign: 'center', padding: '40px', color: 'white' }}>
+        <div style={{ textAlign: "center", padding: "40px", color: "white" }}>
           <p>Cargando aplicación...</p>
         </div>
       </div>
@@ -222,22 +190,38 @@ function App() {
             {timer}
           </div>
           <div className="controls">
-            {currentState === 'Idle' && (
-              <button id="btnIniciar" className="btn btn-start" onClick={handleStart}>
+            {currentState === "Idle" && (
+              <button
+                id="btnIniciar"
+                className="btn btn-start"
+                onClick={handleStart}
+              >
                 ▶ Iniciar Concentración
               </button>
             )}
-            {currentState === 'Focus' && (
-              <button id="btnPausar" className="btn btn-pause" onClick={handlePause}>
+            {currentState === "Focus" && (
+              <button
+                id="btnPausar"
+                className="btn btn-pause"
+                onClick={handlePause}
+              >
                 ⏸ Pausar
               </button>
             )}
-            {currentState === 'Paused' && (
+            {currentState === "Paused" && (
               <>
-                <button id="btnReanudar" className="btn btn-start" onClick={handleResume}>
+                <button
+                  id="btnReanudar"
+                  className="btn btn-start"
+                  onClick={handleResume}
+                >
                   ▶ Reanudar
                 </button>
-                <button id="btnFinalizar" className="btn btn-pause" onClick={handleStop}>
+                <button
+                  id="btnFinalizar"
+                  className="btn btn-pause"
+                  onClick={handleStop}
+                >
                   ⏹ Finalizar
                 </button>
               </>
@@ -268,12 +252,10 @@ function App() {
         </section>
 
         {/* Chart Section */}
-        <section className="chart-section">
-          <h2>📈 Actividad Semanal (Últimos 7 días)</h2>
-          <div className="chart-container">
-            <canvas ref={chartRef}></canvas>
-          </div>
-        </section>
+        <WeeklyChart
+          isStoreReady={isStoreReady}
+          triggerReload={chartReloadTrigger}
+        />
       </main>
     </div>
   );

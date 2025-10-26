@@ -45,6 +45,7 @@ class StoreManager {
     inactivity: number[];
   }> {
     if (!this.store) {
+      console.warn('[StoreManager] Store no inicializado');
       return {
         labels: [],
         concentration: [],
@@ -57,6 +58,7 @@ class StoreManager {
     const inactivity: number[] = [];
 
     try {
+      console.log('[StoreManager] Obteniendo estadísticas de los últimos 7 días...');
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
@@ -69,9 +71,15 @@ class StoreManager {
         labels.push(dateLabel);
 
         const stats = await this.getStats(dateStr);
+        console.log(`[StoreManager] ${dateLabel} (${dateStr}):`, stats);
         concentration.push(stats.concentrated);
         inactivity.push(stats.inactive);
       }
+      console.log('[StoreManager] Estadísticas semanales completas:', {
+        labels,
+        concentration,
+        inactivity
+      });
     } catch (error) {
       console.error('Error getting weekly stats:', error);
     }

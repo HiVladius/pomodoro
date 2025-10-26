@@ -1,6 +1,4 @@
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import angry from "../assets/scream.jpg";
 import motivation from "../assets/love.jpg";
@@ -11,73 +9,71 @@ interface ToastPayload {
     frase: string;
 }
 
-const getRandomPosition = async (): Promise<LogicalPosition> => {
-    const monitor = await primaryMonitor();
-    if (!monitor) return new LogicalPosition(0, 0);
-
-    const windowSize = await getCurrentWindow().innerSize();
-    const monitorSize = monitor.size;
-    const margin = 20;
-
-    const screenW = monitorSize.width;
-    const screenH = monitorSize.height;
-    const winW = windowSize.width;
-    const winH = windowSize.height;
-
-    const positions: LogicalPosition[] = [
-        new LogicalPosition(margin, margin), // top-left
-        new LogicalPosition(screenW - winW - margin, margin), // top-right
-        new LogicalPosition(margin, screenH - winH - margin), // bottom-left
-        new LogicalPosition(screenW - winW - margin, screenH - winH - margin), // bottom-right
-        new LogicalPosition((screenW / 2) - (winW / 2), margin), // top-center
-        new LogicalPosition(
-            (screenW / 2) - (winW / 2),
-            screenH - winH - margin,
-        ), // bottom-center
-        new LogicalPosition(margin, (screenH / 2) - (winH / 2)), // middle-left
-        new LogicalPosition(
-            screenW - winW - margin,
-            (screenH / 2) - (winH / 2),
-        ), // middle-right
-    ];
-
-    return positions[Math.floor(Math.random() * positions.length)];
-};
-
 export const Toast: React.FC = () => {
-    const [visible, setVisible] = useState(false);
+    const [visible, setVisible] = useState(false); // CAMBIO: Volver a false para producción
     const [frase, setFrase] = useState("");
     const [imagenSrc, setImagenSrc] = useState("");
     const [tipoToast, setTipoToast] = useState<"angry" | "motivation" | "break">("motivation");
 
     useEffect(() => {
-        const unlisten = listen<ToastPayload>("show-toast", async (e) => {
-            const { tipo, frase } = e.payload;
+        console.log("[Toast] Listener inicializándose...");
+        
+        const handleToastEvent = async (event: Event) => {
+            const customEvent = event as CustomEvent<ToastPayload>;
+            console.log(`[Toast] ============ EVENTO RECIBIDO ============`);
+            console.log(`[Toast] Event detail:`, customEvent.detail);
+            
+            const { tipo, frase } = customEvent.detail;
+            console.log(`[Toast] Tipo: ${tipo}, Frase: ${frase}`);
 
             setFrase(frase);
             setTipoToast(tipo);
             
             if (tipo === "angry") {
                 setImagenSrc(angry);
+                console.log("[Toast] Imagen angry cargada");
             } else if (tipo === "motivation") {
                 setImagenSrc(motivation);
+                console.log("[Toast] Imagen motivation cargada");
             } else {
                 setImagenSrc("");
+                console.log("[Toast] Sin imagen (break)");
             }
             
-            const newPosition = await getRandomPosition();
-            await getCurrentWindow().setPosition(newPosition);
-            await getCurrentWindow().show();
-            setVisible(true);
+            try {
+                const currentWin = getCurrentWindow();
+                
+                console.log(`[Toast] 1. Actualizando estado visible...`);
+                setVisible(true);
+                
+                console.log(`[Toast] 2. Mostrando ventana...`);
+                await currentWin.show();
+                
+                console.log(`[Toast] 3. Estableciendo focus...`);
+                await currentWin.setFocus();
+                console.log(`[Toast] ✅ Toast visible!`);
 
-            setTimeout(() => {
-                setVisible(false);
-                getCurrentWindow().hide();
-            }, 4000);
-        });
+                setTimeout(async () => {
+                    console.log(`[Toast] 4. Ocultando después de 4 segundos...`);
+                    setVisible(false);
+                    
+                    // Esperar a que la animación termine antes de ocultar la ventana
+                    setTimeout(async () => {
+                        await currentWin.hide();
+                        console.log(`[Toast] ✅ Toast ocultado`);
+                    }, 300); // Esperar el tiempo de transición CSS
+                }, 4000);
+            } catch (err) {
+                console.error("[Toast] ❌ Error al mostrar ventana:", err);
+            }
+        };
+
+        // Escuchar evento personalizado de JavaScript
+        window.addEventListener('show-toast', handleToastEvent);
+        console.log("[Toast] ✅ Listener configurado");
 
         return () => {
-            unlisten.then((f) => f());
+            window.removeEventListener('show-toast', handleToastEvent);
         };
     }, []);
 
