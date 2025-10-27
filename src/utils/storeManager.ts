@@ -1,8 +1,8 @@
 import { Store } from '@tauri-apps/plugin-store';
 
 interface DailyStat {
-  concentrated: number;
-  inactive: number;
+  concentrated: number; // Minutos totales concentrados
+  inactive: number;     // Minutos totales inactivos
 }
 
 class StoreManager {

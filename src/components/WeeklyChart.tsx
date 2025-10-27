@@ -31,7 +31,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerR
           labels: weeklyStat.labels,
           datasets: [
             {
-              label: 'Concentración',
+              label: 'Concentración (min)',
               data: weeklyStat.concentration,
               backgroundColor: 'rgba(79, 172, 254, 0.7)',
               borderColor: 'rgba(79, 172, 254, 1)',
@@ -39,7 +39,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerR
               borderRadius: 6,
             },
             {
-              label: 'Inactividad',
+              label: 'Inactividad (min)',
               data: weeklyStat.inactivity,
               backgroundColor: 'rgba(255, 107, 107, 0.7)',
               borderColor: 'rgba(255, 107, 107, 1)',
