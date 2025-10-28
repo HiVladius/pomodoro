@@ -103,16 +103,16 @@ function App() {
           console.log("[App] Guardando estadísticas:", event.payload);
           await storeManager.updateStats(
             event.payload.date,
-            event.payload.stats
+            event.payload.stats,
           );
           console.log("[App] Estadísticas guardadas exitosamente");
-          
+
           // Disparar recarga del gráfico
           setChartReloadTrigger((prev) => prev + 1);
         } catch (error) {
           console.error("[App] Error updating daily stats:", error);
         }
-      }
+      },
     );
 
     return () => {

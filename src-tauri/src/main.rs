@@ -1,16 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod state;
-mod constants;
-mod toast;
-mod storage;
 mod activity;
-mod timer;
 mod commands;
+mod constants;
+mod state;
+mod storage;
+mod timer;
+mod toast;
 
 use activity::start_activity_listener;
-use timer::start_timer_thread;
 use commands::*;
+use timer::start_timer_thread;
 
 fn main() {
     tauri::Builder::default()
