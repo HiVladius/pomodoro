@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 import "./App.css";
-import { invoke } from "@tauri-apps/api/core";
 import { storeManager } from "./utils/storeManager";
 import { WeeklyChart } from "./components/WeeklyChart";
+import { MonthlyChart } from "./components/MonthlyChart";
+import { useNotifications } from "./hooks/useNotifications";
 
 // Interfaces para los eventos de Rust
 interface TimerPayload {
@@ -29,6 +31,8 @@ interface UpdateDailyStatsPayload {
   };
 }
 
+type ChartView = 'weekly' | 'monthly';
+
 function App() {
   const [timer, setTimer] = useState("25:00");
   const [stats, setStats] = useState({
@@ -41,6 +45,15 @@ function App() {
   >("Idle");
   const [isStoreReady, setIsStoreReady] = useState(false);
   const [chartReloadTrigger, setChartReloadTrigger] = useState(0);
+  const [chartView, setChartView] = useState<ChartView>('weekly');
+
+  // Hook de notificaciones
+  const { 
+    notifyPomodoroComplete, 
+    notifyBreakComplete, 
+    notifySessionStarted,
+    permissionGranted 
+  } = useNotifications();
 
   // Inicializar el store
   useEffect(() => {
@@ -92,7 +105,17 @@ function App() {
 
     // Escuchar cambios de estado
     const unlistenState = listen<StatePayload>("state-changed", (event) => {
-      setCurrentState(event.payload.state);
+      const newState = event.payload.state;
+      setCurrentState(newState);
+      
+      // Enviar notificaciones según el cambio de estado
+      if (newState === 'Focus') {
+        notifySessionStarted();
+      } else if (newState === 'Break') {
+        notifyPomodoroComplete();
+      } else if (newState === 'Idle' && currentState === 'Break') {
+        notifyBreakComplete();
+      }
     });
 
     // Escuchar actualizaciones de estadísticas diarias
@@ -180,6 +203,11 @@ function App() {
       <header className="app-header">
         <h1>🍅 Pomodoro Control</h1>
         <p className="subtitle">Gestiona tu concentración</p>
+        {!permissionGranted && (
+          <p className="notification-warning" style={{ fontSize: '0.85rem', opacity: 0.8, marginTop: '8px' }}>
+            ⚠️ Notificaciones desactivadas
+          </p>
+        )}
       </header>
 
       <main className="app-main">
@@ -252,10 +280,34 @@ function App() {
         </section>
 
         {/* Chart Section */}
-        <WeeklyChart
-          isStoreReady={isStoreReady}
-          triggerReload={chartReloadTrigger}
-        />
+        <section className="chart-view-selector">
+          <button
+            className={`view-btn ${chartView === 'weekly' ? 'active' : ''}`}
+            onClick={() => setChartView('weekly')}
+          >
+            📊 Últimos 7 días
+          </button>
+          <button
+            className={`view-btn ${chartView === 'monthly' ? 'active' : ''}`}
+            onClick={() => setChartView('monthly')}
+          >
+            📅 Mes Completo
+          </button>
+        </section>
+
+        {chartView === 'weekly' && (
+          <WeeklyChart
+            isStoreReady={isStoreReady}
+            triggerReload={chartReloadTrigger}
+          />
+        )}
+
+        {chartView === 'monthly' && (
+          <MonthlyChart
+            isStoreReady={isStoreReady}
+            triggerReload={chartReloadTrigger}
+          />
+        )}
       </main>
     </div>
   );

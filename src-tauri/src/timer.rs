@@ -1,15 +1,15 @@
-use std::thread;
-use std::time::Duration;
-use tauri::{Emitter, AppHandle};
 use crate::constants::*;
-use crate::state::{GLOBAL_STATE, AppState, TimerPayload, StatsPayload, StateChangePayload};
+use crate::state::{AppState, StateChangePayload, StatsPayload, TimerPayload, GLOBAL_STATE};
 use crate::storage::save_stats_to_disk;
 use crate::toast::show_toast;
+use std::thread;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 
 pub fn start_timer_thread(app_handle: AppHandle) {
     thread::spawn(move || {
         let mut last_state = AppState::Idle;
-        
+
         loop {
             thread::sleep(Duration::from_secs(1));
 
@@ -25,9 +25,12 @@ pub fn start_timer_thread(app_handle: AppHandle) {
                     AppState::Idle => "Idle",
                 };
                 app_handle
-                    .emit("state-changed", StateChangePayload { 
-                        state: state_str.to_string() 
-                    })
+                    .emit(
+                        "state-changed",
+                        StateChangePayload {
+                            state: state_str.to_string(),
+                        },
+                    )
                     .unwrap();
             }
 
@@ -51,26 +54,32 @@ pub fn start_timer_thread(app_handle: AppHandle) {
                         println!("[Timer] Inactividad: {} min", state.inactivity_seconds / 60);
                     }
 
-                    if state.inactivity_seconds >= INACTIVITY_LIMIT_SECS 
-                        && state.inactivity_seconds % INACTIVITY_LIMIT_SECS == 0 {
-                        
+                    if state.inactivity_seconds >= INACTIVITY_LIMIT_SECS
+                        && state.inactivity_seconds % INACTIVITY_LIMIT_SECS == 0
+                    {
                         state.stats_inactive += 2;
-                        println!("[Stats] +2 min inactividad (total: {})", state.stats_inactive);
-                        
+                        println!(
+                            "[Stats] +2 min inactividad (total: {})",
+                            state.stats_inactive
+                        );
+
                         save_stats_to_disk(
                             &app_handle,
                             state.stats_concentrated,
                             state.stats_inactive,
                         );
-                        
+
                         app_handle
-                            .emit("stats-update", StatsPayload {
-                                concentrated: state.stats_concentrated,
-                                inactive: state.stats_inactive,
-                                pauses: state.stats_pause,
-                            })
+                            .emit(
+                                "stats-update",
+                                StatsPayload {
+                                    concentrated: state.stats_concentrated,
+                                    inactive: state.stats_inactive,
+                                    pauses: state.stats_pause,
+                                },
+                            )
                             .unwrap();
-                        
+
                         show_toast(
                             &app_handle,
                             "angry".to_string(),
@@ -86,25 +95,28 @@ pub fn start_timer_thread(app_handle: AppHandle) {
                             state.stats_concentrated += 25;
                             println!("[Stats] Ciclo completo: +25 min");
                         }
-                        
+
                         state.app = AppState::Break;
                         state.timer_seconds = BREAK_TIME_SECS;
                         state.stats_pause += 1;
-                        
+
                         save_stats_to_disk(
                             &app_handle,
                             state.stats_concentrated,
                             state.stats_inactive,
                         );
-                        
+
                         app_handle
-                            .emit("stats-update", StatsPayload {
-                                concentrated: state.stats_concentrated,
-                                inactive: state.stats_inactive,
-                                pauses: state.stats_pause,
-                            })
+                            .emit(
+                                "stats-update",
+                                StatsPayload {
+                                    concentrated: state.stats_concentrated,
+                                    inactive: state.stats_inactive,
+                                    pauses: state.stats_pause,
+                                },
+                            )
                             .unwrap();
-                        
+
                         show_toast(
                             &app_handle,
                             "break".to_string(),
@@ -114,11 +126,14 @@ pub fn start_timer_thread(app_handle: AppHandle) {
                         // Fin de Break
                         state.app = AppState::Idle;
                         state.timer_seconds = FOCUS_TIME_SECS;
-                        
+
                         app_handle
-                            .emit("timer-tick", TimerPayload {
-                                time: "25:00".to_string(),
-                            })
+                            .emit(
+                                "timer-tick",
+                                TimerPayload {
+                                    time: "25:00".to_string(),
+                                },
+                            )
                             .unwrap();
                     }
                 }

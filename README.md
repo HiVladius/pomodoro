@@ -1,7 +1,14 @@
-# Tauri + React + Typescript
+# Productivity control
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+This repository contains tools and scripts to help manage and control productivity. Whether you're looking to track your time, set goals, or analyze your work habits, these resources are designed to assist you in optimizing your workflow.
 
-## Recommended IDE Setup
+## Features
+- Time tracking scripts
+- Goal setting templates
+- Productivity analysis tools
+- Send reminders and notifications
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Getting Started
+To get started, clone the repository and explore the available scripts and tools. Each script comes with its own README file with instructions on how to use it.
+```bash
+git clone

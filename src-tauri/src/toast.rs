@@ -1,4 +1,4 @@
-use tauri::{AppHandle,  Manager};
+use tauri::{AppHandle, Manager};
 
 pub fn show_toast(app_handle: &AppHandle, tipo: String, frase: String) {
     if let Some(window) = app_handle.get_webview_window("toast") {
@@ -7,12 +7,12 @@ pub fn show_toast(app_handle: &AppHandle, tipo: String, frase: String) {
             tipo.replace("\"", "\\\""),
             frase.replace("\"", "\\\"")
         );
-        
+
         let js_code = format!(
             r#"window.dispatchEvent(new CustomEvent('show-toast', {{ detail: {} }}));"#,
             payload_json
         );
-        
+
         if let Err(e) = window.eval(&js_code) {
             eprintln!("[Toast] Error al ejecutar JavaScript: {:?}", e);
         }
