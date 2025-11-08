@@ -9,13 +9,29 @@ mod storage;
 mod timer;
 mod toast;
 
+// use toast_lib::db;
 use activity::start_activity_listener;
 use commands::*;
 use notifications::{send_break_reminder, send_concentration_alert, send_pomodoro_notification};
+use tauri_plugin_sql::{Builder, Migration, MigrationKind};
 use timer::start_timer_thread;
 
 fn main() {
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "create_daily_stats_table",
+            sql: include_str!("./db/squema.sql"),
+            kind: MigrationKind::Up,
+        },
+    ];
+
     tauri::Builder::default()
+        .plugin(
+            Builder::default()
+                .add_migrations("postgres://neon:npg@localhost:5432/toast?sslmode=require", migrations)
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
