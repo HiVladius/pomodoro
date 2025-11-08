@@ -50,12 +50,12 @@ pub fn start_timer_thread(app_handle: AppHandle) {
                 if state.app == AppState::Focus {
                     state.inactivity_seconds += 1;
 
-                    if state.inactivity_seconds % 60 == 0 {
+                    if state.inactivity_seconds.is_multiple_of(60) {
                         println!("[Timer] Inactividad: {} min", state.inactivity_seconds / 60);
                     }
 
                     if state.inactivity_seconds >= INACTIVITY_LIMIT_SECS
-                        && state.inactivity_seconds % INACTIVITY_LIMIT_SECS == 0
+                        && state.inactivity_seconds.is_multiple_of(INACTIVITY_LIMIT_SECS)
                     {
                         state.stats_inactive += 2;
                         println!(
