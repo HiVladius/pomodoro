@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js/auto';
-import { storeManager } from '../utils/storeManager';
+import { storeManager } from '../utils/storeManager.ts';
 
 Chart.register(...registerables);
 
