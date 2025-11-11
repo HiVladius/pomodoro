@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { Chart, registerables } from 'chart.js/auto';
-import { storeManager } from '../utils/storeManager';
+import { useEffect, useRef } from "react";
+import { Chart, registerables } from "chart.js/auto";
+import { storeManager } from "../utils/storeManager.ts";
 
 Chart.register(...registerables);
 
@@ -9,7 +9,9 @@ interface WeeklyChartProps {
   triggerReload?: number; // Opcional: para forzar recarga cuando cambie
 }
 
-export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerReload }) => {
+export const WeeklyChart: React.FC<WeeklyChartProps> = (
+  { isStoreReady, triggerReload },
+) => {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartInstanceRef = useRef<Chart | null>(null);
 
@@ -17,32 +19,32 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerR
     if (!chartRef.current || !isStoreReady) return;
 
     try {
-      console.log('[WeeklyChart] Cargando datos semanales...');
+      console.log("[WeeklyChart] Cargando datos semanales...");
       const weeklyStat = await storeManager.getWeeklyStats();
-      console.log('[WeeklyChart] Datos obtenidos:', weeklyStat);
+      console.log("[WeeklyChart] Datos obtenidos:", weeklyStat);
 
       if (chartInstanceRef.current) {
         chartInstanceRef.current.destroy();
       }
 
       chartInstanceRef.current = new Chart(chartRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
           labels: weeklyStat.labels,
           datasets: [
             {
-              label: 'Concentración (min)',
+              label: "Concentración (min)",
               data: weeklyStat.concentration,
-              backgroundColor: 'rgba(79, 172, 254, 0.7)',
-              borderColor: 'rgba(79, 172, 254, 1)',
+              backgroundColor: "rgba(79, 172, 254, 0.7)",
+              borderColor: "rgba(79, 172, 254, 1)",
               borderWidth: 2,
               borderRadius: 6,
             },
             {
-              label: 'Inactividad (min)',
+              label: "Inactividad (min)",
               data: weeklyStat.inactivity,
-              backgroundColor: 'rgba(255, 107, 107, 0.7)',
-              borderColor: 'rgba(255, 107, 107, 1)',
+              backgroundColor: "rgba(255, 107, 107, 0.7)",
+              borderColor: "rgba(255, 107, 107, 1)",
               borderWidth: 2,
               borderRadius: 6,
             },
@@ -54,11 +56,11 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerR
           plugins: {
             legend: {
               display: true,
-              position: 'top',
+              position: "top",
               labels: {
                 font: {
                   size: 12,
-                  weight: 'bold',
+                  weight: "bold",
                 },
                 padding: 15,
               },
@@ -68,7 +70,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerR
             y: {
               beginAtZero: true,
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)',
+                color: "rgba(0, 0, 0, 0.05)",
               },
               ticks: {
                 stepSize: 1,
@@ -83,7 +85,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({ isStoreReady, triggerR
         },
       });
     } catch (error) {
-      console.error('[WeeklyChart] Error loading chart:', error);
+      console.error("[WeeklyChart] Error loading chart:", error);
     }
   };
 

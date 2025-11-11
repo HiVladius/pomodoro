@@ -1,8 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import { initDatabase } from "./db/database";
-import { testDatabaseConnection } from "./db/test";
+import App from "./App.tsx";
+import { initDatabase } from "./db/database.ts";
+import { testDatabaseConnection } from "./db/test.ts";
+
 
 // Inicializar la base de datos al cargar la app
 initDatabase()

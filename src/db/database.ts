@@ -6,7 +6,11 @@ let db: any = null;
 export async function initDatabase() {
   try {
     // Conexión a Neon Local (postgres://neon:npg@localhost:5432/toast)
-    db = await Database.load("postgres://neon:npg@localhost:5432/toast?sslmode=require");
+
+    db = await Database.load(
+      "postgres://neon:npg@localhost:5432/toast?sslmode=require",
+    );
+
     console.log("Database initialized successfully");
   } catch (error) {
     console.error("Failed to initialize database:", error);
@@ -18,7 +22,8 @@ export async function saveDailyStats(
   date: string,
   concentrated: number,
   inactive: number,
-  pause: number
+  pause: number,
+
 ): Promise<void> {
   if (!db) throw new Error("Database not initialized");
 
@@ -42,7 +47,8 @@ export async function saveDailyStats(
 }
 
 export async function fetchDailyStats(
-  date: string
+  date: string,
+
 ): Promise<DailyStatRecord | null> {
   if (!db) throw new Error("Database not initialized");
 
@@ -63,7 +69,8 @@ export async function fetchDailyStats(
 
 export async function getStatsRange(
   startDate: string,
-  endDate: string
+  endDate: string,
+
 ): Promise<DailyStatRecord[]> {
   if (!db) throw new Error("Database not initialized");
 
@@ -83,7 +90,8 @@ export async function getStatsRange(
 }
 
 export async function getLastNDaysStats(
-  days: number
+  days: number,
+
 ): Promise<DailyStatRecord[]> {
   if (!db) throw new Error("Database not initialized");
 

@@ -1,3 +1,5 @@
+// TODO: Verify the use of the notification module
+
 pub const FOCUS_TIME_SECS: u32 = 25 * 60;
 pub const BREAK_TIME_SECS: u32 = 5 * 60;
 pub const INACTIVITY_LIMIT_SECS: u32 = 2 * 60; // 2 minutos

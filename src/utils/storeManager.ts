@@ -1,8 +1,8 @@
-import { Store } from '@tauri-apps/plugin-store';
+import { Store } from "@tauri-apps/plugin-store";
 
 interface DailyStat {
   concentrated: number; // Minutos totales concentrados
-  inactive: number;     // Minutos totales inactivos
+  inactive: number; // Minutos totales inactivos
 }
 
 interface MonthlyStat {
@@ -20,18 +20,18 @@ class StoreManager {
 
   async initialize(): Promise<void> {
     try {
-      this.store = await Store.load('stats.dat');
+      this.store = await Store.load("stats.dat");
     } catch (error) {
-      console.error('Error initializing store:', error);
+      console.error("Error initializing store:", error);
     }
   }
 
   private getMonthKey(year: number, month: number): string {
-    return `${year}-${String(month).padStart(2, '0')}`;
+    return `${year}-${String(month).padStart(2, "0")}`;
   }
 
   private getDayKey(day: number): string {
-    return String(day).padStart(2, '0');
+    return String(day).padStart(2, "0");
   }
 
   async getStats(date: string): Promise<DailyStat> {
@@ -44,20 +44,20 @@ class StoreManager {
       const year = dateObj.getFullYear();
       const month = dateObj.getMonth() + 1;
       const day = dateObj.getDate();
-      
+
       const monthKey = this.getMonthKey(year, month);
       const monthData = await this.store.get<MonthlyStat>(monthKey);
-      
+
       if (monthData) {
         const dayKey = this.getDayKey(day);
         return monthData.days[dayKey] || { concentrated: 0, inactive: 0 };
       }
-      
+
       // Fallback a formato antiguo (por compatibilidad)
       const stats = await this.store.get<DailyStat>(date);
       return stats || { concentrated: 0, inactive: 0 };
     } catch (error) {
-      console.error('Error getting stats:', error);
+      console.error("Error getting stats:", error);
       return { concentrated: 0, inactive: 0 };
     }
   }
@@ -69,13 +69,13 @@ class StoreManager {
       const year = dateObj.getFullYear();
       const month = dateObj.getMonth() + 1;
       const day = dateObj.getDate();
-      
+
       const monthKey = this.getMonthKey(year, month);
       const dayKey = this.getDayKey(day);
-      
+
       // Obtener o crear datos del mes
       let monthData = await this.store.get<MonthlyStat>(monthKey);
-      
+
       if (!monthData) {
         monthData = {
           year,
@@ -87,14 +87,14 @@ class StoreManager {
           },
         };
       }
-      
+
       monthData.days[dayKey] = stats;
       monthData.metadata.updatedAt = new Date().toISOString();
-      
+
       await this.store.set(monthKey, monthData);
       await this.store.save();
     } catch (error) {
-      console.error('Error updating stats:', error);
+      console.error("Error updating stats:", error);
     }
   }
 
@@ -104,7 +104,7 @@ class StoreManager {
     inactivity: number[];
   }> {
     if (!this.store) {
-      console.warn('[StoreManager] Store no inicializado');
+      console.warn("[StoreManager] Store no inicializado");
       return {
         labels: [],
         concentration: [],
@@ -117,14 +117,16 @@ class StoreManager {
     const inactivity: number[] = [];
 
     try {
-      console.log('[StoreManager] Obteniendo estadísticas de los últimos 7 días...');
+      console.log(
+        "[StoreManager] Obteniendo estadísticas de los últimos 7 días...",
+      );
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        const dateLabel = date.toLocaleDateString('es-ES', {
-          month: '2-digit',
-          day: '2-digit',
+        const dateStr = date.toISOString().split("T")[0];
+        const dateLabel = date.toLocaleDateString("es-ES", {
+          month: "2-digit",
+          day: "2-digit",
         });
 
         labels.push(dateLabel);
@@ -134,19 +136,22 @@ class StoreManager {
         concentration.push(stats.concentrated);
         inactivity.push(stats.inactive);
       }
-      console.log('[StoreManager] Estadísticas semanales completas:', {
+      console.log("[StoreManager] Estadísticas semanales completas:", {
         labels,
         concentration,
-        inactivity
+        inactivity,
       });
     } catch (error) {
-      console.error('Error getting weekly stats:', error);
+      console.error("Error getting weekly stats:", error);
     }
 
     return { labels, concentration, inactivity };
   }
 
-  async incrementStat(date: string, field: 'concentrated' | 'inactive'): Promise<void> {
+  async incrementStat(
+    date: string,
+    field: "concentrated" | "inactive",
+  ): Promise<void> {
     const stats = await this.getStats(date);
     stats[field] += 1;
     await this.updateStats(date, stats);
@@ -159,12 +164,12 @@ class StoreManager {
     monthLabel: string;
   }> {
     if (!this.store) {
-      console.warn('[StoreManager] Store no inicializado');
+      console.warn("[StoreManager] Store no inicializado");
       return {
         labels: [],
         concentration: [],
         inactivity: [],
-        monthLabel: '',
+        monthLabel: "",
       };
     }
 
@@ -177,8 +182,12 @@ class StoreManager {
     const inactivity: number[] = [];
 
     try {
-      console.log(`[StoreManager] Obteniendo estadísticas del mes ${targetYear}-${String(targetMonth).padStart(2, '0')}...`);
-      
+      console.log(
+        `[StoreManager] Obteniendo estadísticas del mes ${targetYear}-${
+          String(targetMonth).padStart(2, "0")
+        }...`,
+      );
+
       const monthKey = this.getMonthKey(targetYear, targetMonth);
       const monthData = await this.store.get<MonthlyStat>(monthKey);
 
@@ -187,10 +196,11 @@ class StoreManager {
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dayKey = this.getDayKey(day);
-        const dateLabel = new Date(targetYear, targetMonth - 1, day).toLocaleDateString('es-ES', {
-          weekday: 'short',
-          day: '2-digit',
-        });
+        const dateLabel = new Date(targetYear, targetMonth - 1, day)
+          .toLocaleDateString("es-ES", {
+            weekday: "short",
+            day: "2-digit",
+          });
 
         labels.push(dateLabel);
 
@@ -204,12 +214,13 @@ class StoreManager {
         }
       }
 
-      const monthLabel = new Date(targetYear, targetMonth - 1).toLocaleDateString('es-ES', {
-        month: 'long',
-        year: 'numeric',
-      });
+      const monthLabel = new Date(targetYear, targetMonth - 1)
+        .toLocaleDateString("es-ES", {
+          month: "long",
+          year: "numeric",
+        });
 
-      console.log('[StoreManager] Estadísticas mensuales completas:', {
+      console.log("[StoreManager] Estadísticas mensuales completas:", {
         labels,
         concentration,
         inactivity,
@@ -218,17 +229,21 @@ class StoreManager {
 
       return { labels, concentration, inactivity, monthLabel };
     } catch (error) {
-      console.error('Error getting monthly stats:', error);
+      console.error("Error getting monthly stats:", error);
       return {
         labels: [],
         concentration: [],
         inactivity: [],
-        monthLabel: '',
+        monthLabel: "",
       };
     }
   }
 
-  async getDailyInMonth(year: number, month: number, day: number): Promise<DailyStat> {
+  async getDailyInMonth(
+    year: number,
+    month: number,
+    day: number,
+  ): Promise<DailyStat> {
     if (!this.store) {
       return { concentrated: 0, inactive: 0 };
     }
@@ -244,7 +259,7 @@ class StoreManager {
 
       return { concentrated: 0, inactive: 0 };
     } catch (error) {
-      console.error('Error getting daily stats in month:', error);
+      console.error("Error getting daily stats in month:", error);
       return { concentrated: 0, inactive: 0 };
     }
   }
