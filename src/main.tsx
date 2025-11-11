@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import { initDatabase } from "./db/database.ts";
 import { testDatabaseConnection } from "./db/test.ts";
 
+
 // Inicializar la base de datos al cargar la app
 initDatabase()
   .then(() => {
