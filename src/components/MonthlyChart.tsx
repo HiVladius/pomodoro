@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { Chart, registerables } from 'chart.js/auto';
-import { storeManager } from '../utils/storeManager';
+import { useEffect, useRef, useState } from "react";
+import { Chart, registerables } from "chart.js/auto";
+import { storeManager } from "../utils/storeManager";
 
 Chart.register(...registerables);
 
@@ -11,23 +11,23 @@ interface MonthlyChartProps {
   month?: number;
 }
 
-export const MonthlyChart: React.FC<MonthlyChartProps> = ({ 
-  isStoreReady, 
+export const MonthlyChart: React.FC<MonthlyChartProps> = ({
+  isStoreReady,
   triggerReload,
   year,
-  month 
+  month,
 }) => {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartInstanceRef = useRef<Chart | null>(null);
-  const [monthLabel, setMonthLabel] = useState('');
+  const [monthLabel, setMonthLabel] = useState("");
 
   const loadChart = async () => {
     if (!chartRef.current || !isStoreReady) return;
 
     try {
-      console.log('[MonthlyChart] Cargando datos mensuales...');
+      console.log("[MonthlyChart] Cargando datos mensuales...");
       const monthlyData = await storeManager.getMonthlyStats(year, month);
-      console.log('[MonthlyChart] Datos obtenidos:', monthlyData);
+      console.log("[MonthlyChart] Datos obtenidos:", monthlyData);
 
       setMonthLabel(monthlyData.monthLabel);
 
@@ -36,23 +36,23 @@ export const MonthlyChart: React.FC<MonthlyChartProps> = ({
       }
 
       chartInstanceRef.current = new Chart(chartRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
           labels: monthlyData.labels,
           datasets: [
             {
-              label: 'Concentración (min)',
+              label: "Concentración (min)",
               data: monthlyData.concentration,
-              backgroundColor: 'rgba(79, 172, 254, 0.7)',
-              borderColor: 'rgba(79, 172, 254, 1)',
+              backgroundColor: "rgba(79, 172, 254, 0.7)",
+              borderColor: "rgba(79, 172, 254, 1)",
               borderWidth: 2,
               borderRadius: 6,
             },
             {
-              label: 'Inactividad (min)',
+              label: "Inactividad (min)",
               data: monthlyData.inactivity,
-              backgroundColor: 'rgba(255, 107, 107, 0.7)',
-              borderColor: 'rgba(255, 107, 107, 1)',
+              backgroundColor: "rgba(255, 107, 107, 0.7)",
+              borderColor: "rgba(255, 107, 107, 1)",
               borderWidth: 2,
               borderRadius: 6,
             },
@@ -64,11 +64,11 @@ export const MonthlyChart: React.FC<MonthlyChartProps> = ({
           plugins: {
             legend: {
               display: true,
-              position: 'top',
+              position: "top",
               labels: {
                 font: {
                   size: 12,
-                  weight: 'bold',
+                  weight: "bold",
                 },
                 padding: 15,
               },
@@ -78,7 +78,7 @@ export const MonthlyChart: React.FC<MonthlyChartProps> = ({
             y: {
               beginAtZero: true,
               grid: {
-                color: 'rgba(0, 0, 0, 0.05)',
+                color: "rgba(0, 0, 0, 0.05)",
               },
               ticks: {
                 stepSize: 1,
@@ -93,7 +93,7 @@ export const MonthlyChart: React.FC<MonthlyChartProps> = ({
         },
       });
     } catch (error) {
-      console.error('[MonthlyChart] Error loading chart:', error);
+      console.error("[MonthlyChart] Error loading chart:", error);
     }
   };
 
