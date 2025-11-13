@@ -6,3 +6,9 @@ export const getLocalDateString = (): string => {
   const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+//Parsea una fecha en formato 'YYYY-MM-DD' con fecha local, no UTC
+export const parseLocalDate = (dateString: string): Date => {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}

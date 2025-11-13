@@ -7,8 +7,10 @@ import {
   TimerPayload,
   TimerState,
   UpdateDailyStatsPayload,
+  CurrentStatePayload,
 } from "../types/timer";
 import { storeManager } from "../utils/storeManager";
+import { invoke } from "@tauri-apps/api/core";
 
 interface UseTimerStateProps {
   isStoreReady: boolean;
@@ -28,6 +30,24 @@ export function useTimerState({
     pauses: 0,
   });
   const [currentState, setCurrentState] = useState<TimerState>("Idle");
+
+
+  useEffect(() => {
+    if (!isStoreReady) return
+
+    const syncState = async () => {
+      try {
+        const state = await invoke<CurrentStatePayload>("get_current_state");
+        setCurrentState(state.state)
+        setTimer(state.timer)
+        setStats(state.stats)
+      } catch (error: unknown) {
+        console.error(error);
+      }
+    }
+
+    syncState();
+  }, [isStoreReady])
 
   // Hook para suscribirse a eventos de Rust
   useEffect(() => {

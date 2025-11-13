@@ -1,6 +1,8 @@
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::fmt::Debug;
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum AppState {
@@ -36,7 +38,7 @@ pub struct TimerPayload {
     pub time: String,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug)]
 pub struct StatsPayload {
     pub concentrated: u32,
     pub inactive: u32,
@@ -46,6 +48,14 @@ pub struct StatsPayload {
 #[derive(Clone, Serialize, Debug)]
 pub struct StateChangePayload {
     pub state: String,
+}
+
+// Payload para sincronización del estado completo
+#[derive(Clone, Serialize, Debug)]
+pub struct CurrentStatePayload {
+    pub state: String,
+    pub timer: String,
+    pub stats: StatsPayload,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
