@@ -129,3 +129,32 @@ pub fn get_daily_stats(_app_handle: AppHandle) -> ChartData {
         inactivity: inactivity_data,
     }
 }
+
+#[tauri::command]
+pub fn get_current_state() -> crate::state::CurrentStatePayload {
+    
+    use crate::state::CurrentStatePayload;
+    
+    let state = GLOBAL_STATE.lock().unwrap();
+    
+    let state_str = match state.app {
+        AppState::Focus => "Focus",
+        AppState::Break => "Break",
+        AppState::Paused => "Paused",
+        AppState::Idle => "Idle",
+    };
+    
+    let minutes = state.timer_seconds / 60;
+    let seconds = state.timer_seconds % 60;
+    let timer_str = format!("{:02}:{:02}", minutes, seconds);
+    
+    CurrentStatePayload {
+        state: state_str.to_string(),
+        timer: timer_str,
+        stats: StatsPayload {
+            concentrated: state.stats_concentrated,
+            inactive: state.stats_inactive,
+            pauses: state.stats_pause,
+        },
+    }
+}

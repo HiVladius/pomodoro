@@ -1,4 +1,5 @@
 import { Store } from "@tauri-apps/plugin-store";
+import {parseLocalDate} from "../helpers/today.ts"
 
 interface DailyStat {
   concentrated: number; // Minutos totales concentrados
@@ -40,7 +41,7 @@ class StoreManager {
     }
     try {
       // Primero intenta obtener del formato mensual
-      const dateObj = new Date(date);
+      const dateObj = parseLocalDate(date);
       const year = dateObj.getFullYear();
       const month = dateObj.getMonth() + 1;
       const day = dateObj.getDate();
@@ -65,7 +66,7 @@ class StoreManager {
   async updateStats(date: string, stats: DailyStat): Promise<void> {
     if (!this.store) return;
     try {
-      const dateObj = new Date(date);
+      const dateObj = parseLocalDate(date);
       const year = dateObj.getFullYear();
       const month = dateObj.getMonth() + 1;
       const day = dateObj.getDate();

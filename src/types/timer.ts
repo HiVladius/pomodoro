@@ -12,6 +12,12 @@ export interface StatePayload {
   state: "Idle" | "Focus" | "Paused" | "Break";
 }
 
+export interface CurrentStatePayload {
+  state: "Idle" | "Focus" | "Paused" | "Break";
+  timer: string;
+  stats: Stats;
+}
+
 export interface UpdateDailyStatsPayload {
   date: string;
   stats: {

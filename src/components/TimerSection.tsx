@@ -39,7 +39,7 @@ export function TimerSection(
             className="btn btn-pause"
             onClick={onPause}
           >
-            | ⏸ Pausar
+            ⏸ Pausar
           </button>
         )}
         {currentState === "Paused" && (

@@ -13,7 +13,7 @@ import { ChartView, TimerState } from "./types/timer.ts";
 
 function App() {
   const [chartReloadTrigger, setChartReloadTrigger] = useState(0);
-  const [chartView, setChartView] = useState<ChartView>("weekly");
+  const [chartView, setChartView] = useState<ChartView>("weekly");  
 
   // Inicializar el store
   const { isStoreReady, initialStats } = useStoreInitialization();

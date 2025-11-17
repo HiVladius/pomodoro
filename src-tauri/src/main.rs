@@ -50,6 +50,7 @@ fn main() {
             send_pomodoro_notification,
             send_break_reminder,
             send_concentration_alert,
+            get_current_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
